@@ -20,16 +20,22 @@ Hardware Hookup:
 SoftwareSerial XBee(2, 3); // RX, TX
 
 #include <math.h>
+#include "HX711.h"
 
+#define SCALE_DAT  6
+#define SCALE_CLK  5
 #define DHTPIN 4
 #define DHTTYPE DHT22
 
+HX711 scale(SCALE_DAT, SCALE_CLK);
+
+float calibration_factor = -22930; //-7050 worked for my 440lb max scale setup
 
 DHT dht(DHTPIN,DHTTYPE);
 
 float humidity_readings[60];
 float tempc_readings[60];
-float tempf_readings[60];
+float weight_readings[60];
 int pos;
 unsigned long last_read;
 char my_sensor_id;
@@ -39,16 +45,16 @@ void print_all_readings(boolean transmit) {
     XBee.print("[remote] ");
     XBee.print(average_readings(humidity_readings, 60));
     XBee.print("% Humidity / ");
-    XBee.print(average_readings(tempf_readings, 60));
-    XBee.print(" degrees F / ");
+    XBee.print(average_readings(weight_readings, 60));
+    XBee.print(" kg / ");
     XBee.print(average_readings(tempc_readings, 60));
     XBee.println(" degrees C");
   } else {
     Serial.print("[local] ");
     Serial.print(average_readings(humidity_readings, 60));
     Serial.print("% Humidity / ");
-    Serial.print(average_readings(tempf_readings, 60));
-    Serial.print(" degrees F / ");
+    Serial.print(average_readings(weight_readings, 60));
+    Serial.print(" kg / ");
     Serial.print(average_readings(tempc_readings, 60));
     Serial.println(" degrees C");
   }
@@ -87,9 +93,17 @@ void setup()
   // pre-fill the readings array with bad values
   for (int i = 0; i < 60; i++) {
     humidity_readings[i] = -999;
-    tempf_readings[i] = -999;
+    weight_readings[i] = -999;
     tempc_readings[i] = -999;
   }
+
+  scale.set_scale();
+  scale.tare();  //Reset the scale to 0
+  scale.set_scale(calibration_factor); //Adjust to this calibration factor
+  
+  long zero_factor = scale.read_average(); //Get a baseline reading
+  Serial.print("Zero factor: "); //This can be used to remove the need to tare the scale. Useful in permanent scale projects.
+  Serial.println(zero_factor);
   
 }
 
@@ -97,6 +111,11 @@ void loop()
 {
   unsigned long current_time = millis();
 
+float sound_level = analogRead(0);
+if (sound_level > 600) {
+  Serial.print("mic reading:");
+  Serial.println(sound_level);
+}
   if (XBee.available()) {
     char input = XBee.read();
     Serial.print("Got input from XBee: '");
@@ -117,7 +136,7 @@ void loop()
     // Read temperature as Celsius (the default)
     tempc_readings[pos] = dht.readTemperature();
     // Read temperature as Fahrenheit (isFahrenheit = true)
-    tempf_readings[pos] = dht.readTemperature(true);
+    weight_readings[pos] = scale.get_units();
     last_read = current_time;
     pos++;
   }
@@ -127,7 +146,7 @@ void loop()
   if (pos >= 59) {
 //    XBee.print("[passive] ");
 //    print_all_readings(true);
-//    print_all_readings(false);
+    print_all_readings(false);
     pos = 0;
   }
  
