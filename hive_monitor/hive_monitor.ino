@@ -36,6 +36,7 @@ DHT dht(DHTPIN,DHTTYPE);
 float humidity_readings[60];
 float tempc_readings[60];
 float weight_readings[60];
+float sound_readings[60];
 int pos;
 unsigned long last_read;
 char my_sensor_id;
@@ -45,18 +46,22 @@ void print_all_readings(boolean transmit) {
     XBee.print("[remote] ");
     XBee.print(average_readings(humidity_readings, 60));
     XBee.print("% Humidity / ");
+    XBee.print(average_readings(tempc_readings, 60));
+    XBee.print(" degrees C / ");
     XBee.print(average_readings(weight_readings, 60));
     XBee.print(" kg / ");
-    XBee.print(average_readings(tempc_readings, 60));
-    XBee.println(" degrees C");
+    XBee.print(average_readings(sound_readings, 60));
+    XBee.println(" noise");
   } else {
     Serial.print("[local] ");
     Serial.print(average_readings(humidity_readings, 60));
     Serial.print("% Humidity / ");
+    Serial.print(average_readings(tempc_readings, 60));
+    Serial.print(" degrees C / ");
     Serial.print(average_readings(weight_readings, 60));
     Serial.print(" kg / ");
-    Serial.print(average_readings(tempc_readings, 60));
-    Serial.println(" degrees C");
+    Serial.print(average_readings(sound_readings, 60));
+    Serial.println(" noise");
   }
   
 }
@@ -95,6 +100,7 @@ void setup()
     humidity_readings[i] = -999;
     weight_readings[i] = -999;
     tempc_readings[i] = -999;
+    sound_readings[i] = -999;
   }
 
   scale.set_scale();
@@ -111,11 +117,6 @@ void loop()
 {
   unsigned long current_time = millis();
 
-float sound_level = analogRead(0);
-if (sound_level > 600) {
-  Serial.print("mic reading:");
-  Serial.println(sound_level);
-}
   if (XBee.available()) {
     char input = XBee.read();
     Serial.print("Got input from XBee: '");
@@ -128,15 +129,10 @@ if (sound_level > 600) {
   // if it's been more than a second since we last read, do another reading
   // and update the last_read time
   if (current_time - 1000 >= last_read) {
-    Serial.print("current:"); 
-    Serial.print(current_time); 
-    Serial.print("last_read:"); 
-    Serial.println(last_read); 
     humidity_readings[pos] = dht.readHumidity();
-    // Read temperature as Celsius (the default)
     tempc_readings[pos] = dht.readTemperature();
-    // Read temperature as Fahrenheit (isFahrenheit = true)
     weight_readings[pos] = scale.get_units();
+    sound_readings[pos] = analogRead(0);
     last_read = current_time;
     pos++;
   }
@@ -145,7 +141,7 @@ if (sound_level > 600) {
   // wrap the array position back around to 0
   if (pos >= 59) {
 //    XBee.print("[passive] ");
-//    print_all_readings(true);
+    print_all_readings(true);
     print_all_readings(false);
     pos = 0;
   }
